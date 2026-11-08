@@ -200,6 +200,47 @@ function selectFile(target) {
   selectedFileId = target?.fileId || '';
   updateTree(false);
 }
+function configureSourceNavigation(target) {
+  const source = drawerBody.querySelector('.single-source');
+  const link = drawer.querySelector('[data-vscode-open]');
+  const status = drawer.querySelector('[data-vscode-status]');
+  link.removeAttribute('href'); link.setAttribute('aria-disabled', 'true');
+  status.textContent = '';
+  if (!source) { status.textContent = '此文件不提供源码定位'; return; }
+  const lines = [...source.querySelectorAll('.source-code [data-line]')];
+  const focus = Number(source.dataset.focusLine) || 1;
+  const stations = lines.filter((line, i) => line.dataset.state !== 'unchanged' &&
+    (!i || lines[i-1].dataset.state === 'unchanged'));
+  let position = -1;
+  const select = (line, scroll) => {
+    source.querySelectorAll('.review-active').forEach(el => el.classList.remove('review-active'));
+    if (!line) return;
+    line.classList.add('review-active');
+    const n = Number(line.dataset.line);
+    position = stations.findIndex(el => Number(el.dataset.line) === n);
+    source.querySelector('[data-code-position]').textContent = `第 ${n} 行 · ${position >= 0 ? position+1 : '—'} / ${stations.length} 处改动`;
+    // Infer project root from the standalone report location; never bake host paths into reports.
+    const path = decodeURIComponent(location.pathname);
+    const marker = path.lastIndexOf('/.oil-diff/');
+    if (location.protocol === 'file:' && marker >= 0 && !target.path.split('/').includes('..') && !target.path.startsWith('/')) {
+      const query = new URLSearchParams({root:path.slice(0, marker), path:target.path, line:String(n)});
+      link.href = 'archify-vscode://open?' + query.toString();
+      link.setAttribute('aria-disabled', 'false');
+      status.textContent = `打开项目并定位第 ${n} 行（当前工作区文件）`;
+    } else { status.textContent = '请从项目 .oil-diff 目录打开本地报告后使用 VS Code 定位'; }
+    if (scroll) line.scrollIntoView({block:'nearest',inline:'nearest'});
+  };
+  for (const button of source.querySelectorAll('[data-select-line]')) button.addEventListener('click', () => select(button.closest('[data-line]'), false));
+  for (const [selector, step] of [['[data-code-prev]', -1], ['[data-code-next]', 1]]) {
+    const button = source.querySelector(selector); button.disabled = !stations.length;
+    button.addEventListener('click', () => {
+      const index = position < 0 ? (step > 0 ? 0 : stations.length-1) : (position + step + stations.length) % stations.length;
+      select(stations[index], true);
+    });
+  }
+  select(lines.find(el => Number(el.dataset.line) === focus) || lines[0], false);
+}
+
 function populateDrawer(target, switching) {
   for (const animation of contentAnimations) animation.cancel();
   contentAnimations = [];
@@ -220,6 +261,7 @@ function populateDrawer(target, switching) {
   drawerBody.replaceChildren(document.getElementById('source-' + target.id).content.cloneNode(true));
   for (const details of drawerBody.querySelectorAll('details')) initializeFold(details);
   drawerBody.scrollTop = 0;
+  configureSourceNavigation(target);
   const index = targets.indexOf(target);
   previousButton.disabled = index === 0;
   nextButton.disabled = index === targets.length - 1;

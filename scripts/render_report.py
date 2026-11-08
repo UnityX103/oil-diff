@@ -108,6 +108,37 @@ def rider_css() -> str:
     return "/* Bundled font license: " + license_text + " */\n" + css
 
 
+def single_source_html(f: dict[str, object], focus: int = 1) -> str:
+    if f.get("binary"):
+        return '<p class="empty-copy">二进制文件，不展示源码。</p>'
+    if "afterText" not in f:
+        raise ValueError("请重新采集完整源码：" + str(f["path"]))
+    before = str(f.get("beforeText", "")).splitlines()
+    after = str(f["afterText"]).splitlines()
+    states = ["unchanged"] * len(after)
+    deleted = []
+    for tag, i, j, k, l in difflib.SequenceMatcher(None, before, after, autojunk=False).get_opcodes():
+        if tag in ("insert", "replace"):
+            states[k:l] = ["added" if tag == "insert" else "modified"] * (l-k)
+        if tag in ("delete", "replace"):
+            deleted.extend((n + 1, before[n]) for n in range(i, j))
+    out = '<section class="rider-code-preview single-source" data-focus-line="' + str(focus) + '">'
+    out += '<div class="diff-legend"><span class="unchanged">灰色：未改</span><span class="added">绿色：新增／修改</span><span class="deleted">删除：见下方</span></div>'
+    out += '<div class="review-nav"><button type="button" data-code-prev>↑ 上一处改动</button><button type="button" data-code-next>↓ 下一处改动</button><output aria-live="polite" data-code-position></output></div>'
+    out += '<pre class="source-code" tabindex="0" aria-label="修改后完整源码">'
+    for n, (line, state) in enumerate(zip(after, states), 1):
+        out += f'<span class="code-line {state}" data-line="{n}" data-state="{state}"><button type="button" class="line-number" data-select-line="{n}" aria-label="选择第 {n} 行">{n}</button><span class="line-text">{syntax_text(line, str(f["path"]))}</span></span>'
+    out += '</pre>'
+    if not after:
+        out += '<p class="empty-copy">目标文件为空或已删除，不能定位旧行到当前文件。</p>'
+    if deleted:
+        out += '<details class="deleted-code"><summary>查看删除的旧代码（旧行号，不用于跳转）</summary><pre>'
+        for n, line in deleted:
+            out += f'<span class="code-line deleted"><span class="line-number">{n}</span><span class="line-text">{syntax_text(line, str(f["path"]))}</span></span>'
+        out += '</pre></details>'
+    return out + '</section>'
+
+
 def comparison_html(before: list[dict[str, object]], after: list[dict[str, object]], f: dict[str, object]) -> str:
     old = "\n".join(str(r["text"]) for r in before)
     new = "\n".join(str(r["text"]) for r in after)
@@ -834,13 +865,8 @@ def render_report_body(data: dict[str, object], spec: dict[str, object]) -> str:
         after = after or []
         rem = remaining_chunks(f, before, after) if chunks else []
         variant_html = f'<span class="file-variant">{e(variant)}</span>' if variant else ""
-        content = comparison_html(before, after, f)
-        if rem:
-            content += (
-                f'<details class="complete-diff"><summary><span>查看该文件其余修改（共 {len(rem)} 处）</span>'
-                f'{CHEVRON_SVG}</summary><div class="fold-content" data-fold-content>'
-                f'<div class="complete-body">{full_diff_html(f, rem)}</div></div></details>'
-            )
+        focus = int(after[0]["line"]) if after else int(chunks[0]["newStart"]) if chunks else 1
+        content = single_source_html(f, focus)
         templates.append(f'<template id="source-{dom_id}">{content}</template>')
         return (
             f'<div class="diff-card" id="{dom_id}" tabindex="-1" data-file-id="{e(f["id"])}" data-requirement="{n}">'
@@ -1079,7 +1105,7 @@ def render_report_body(data: dict[str, object], spec: dict[str, object]) -> str:
         '<div class="drawer-information"><p class="drawer-context"></p>'
         '<div class="drawer-file-heading"><span class="drawer-file-identity"></span>'
         '<span class="drawer-counts"></span></div><p class="drawer-role" hidden></p></div></header>\n'
-        '<div class="drawer-body"></div></aside></div>'
+        '<div class="drawer-body"></div><footer class="drawer-footer"><a class="vscode-open" data-vscode-open aria-disabled="true">在 VS Code 中打开项目并定位</a><span data-vscode-status></span></footer></aside></div>'
     )
 
     lightbox = (

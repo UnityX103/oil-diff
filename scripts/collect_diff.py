@@ -228,6 +228,8 @@ def collect_diff(repo: Path, out_dir: Path, range_specs: list[str] | None = None
                     "from": from_short,
                     "to": to_short,
                     "chunks": chunks,
+                    "beforeText": "" if is_binary else old_src,
+                    "afterText": "" if is_binary else new_src,
                 }
             )
 
