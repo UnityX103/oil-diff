@@ -376,8 +376,11 @@ body.is-tree-collapsed .tree-reopen-btn{display:inline-flex;align-items:center;g
 .single-source .code-line{display:block;width:max-content;min-width:100%;box-sizing:border-box;white-space:pre;overflow-wrap:normal;scroll-margin-block:100px}
 .single-source .line-text{white-space:pre;overflow-wrap:normal}
 .single-source button.line-number{font:inherit;font-size:12px;border:0;background:transparent;cursor:pointer;color:#808080}
-.single-source .review-nav button,.vscode-open{border:1px solid #4c5260;background:#24262b;color:#d0d0d0;padding:7px 12px;border-radius:5px;cursor:pointer;font:13px/1.4 RiderPreviewMono,monospace}
+.single-source .review-nav button{border:1px solid #4c5260;background:#24262b;color:#d0d0d0;padding:7px 12px;border-radius:5px;cursor:pointer;font:13px/1.4 RiderPreviewMono,monospace}
 .single-source .review-nav button:disabled,.vscode-open[aria-disabled=true]{opacity:.45;cursor:default}
 .single-source .review-nav output{font:12px/1.4 RiderPreviewMono,monospace;align-self:center}
 .deleted-code summary{color:#aaa;padding:12px;cursor:pointer}
-.drawer-footer{flex:none;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#191a1c;border-top:1px solid #424242;color:#aaa;font-size:12px}
+.drawer-footer{flex:none;padding:12px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:transparent;border-top:1px solid #e6dccb;color:#948365;font-size:12px}
+
+.vscode-open{border:1px solid #e2d7c3;background:transparent;color:#7b6237;padding:7px 12px;border-radius:5px;font:500 12px/1.6 var(--sans);cursor:pointer}
+.vscode-open:hover:not([aria-disabled=true]){background:#f2e7d0;border-color:#d6bc88}

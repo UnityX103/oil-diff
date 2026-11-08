@@ -123,14 +123,20 @@ def single_source_html(f: dict[str, object], focus: int = 1) -> str:
         if tag in ("delete", "replace"):
             deleted.extend((n + 1, before[n]) for n in range(i, j))
     out = '<section class="rider-code-preview single-source" data-focus-line="' + str(focus) + '">'
-    out += '<div class="diff-legend"><span class="unchanged">灰色：未改</span><span class="added">绿色：新增／修改</span><span class="deleted">删除：见下方</span></div>'
+    out += '<div class="diff-legend"><span class="added">绿色：新增／修改</span><span class="deleted">删除：见下方</span></div>'
     out += '<div class="review-nav"><button type="button" data-code-prev>↑ 上一处改动</button><button type="button" data-code-next>↓ 下一处改动</button><output aria-live="polite" data-code-position></output></div>'
-    out += '<pre class="source-code" tabindex="0" aria-label="修改后完整源码">'
+    out += '<pre class="source-code" tabindex="0" aria-label="新增和修改后的代码段">'
+    previous_line = None
     for n, (line, state) in enumerate(zip(after, states), 1):
+        if state == "unchanged":
+            continue
+        if previous_line is not None and n > previous_line + 1:
+            out += '<span class="source-gap" aria-label="省略未改代码">⋯</span>'
+        previous_line = n
         out += f'<span class="code-line {state}" data-line="{n}" data-state="{state}"><button type="button" class="line-number" data-select-line="{n}" aria-label="选择第 {n} 行">{n}</button><span class="line-text">{syntax_text(line, str(f["path"]))}</span></span>'
     out += '</pre>'
-    if not after:
-        out += '<p class="empty-copy">目标文件为空或已删除，不能定位旧行到当前文件。</p>'
+    if previous_line is None:
+        out += '<p class="empty-copy">本文件没有新增或修改后的代码段；删除内容见下方，不提供旧行跳转。</p>'
     if deleted:
         out += '<details class="deleted-code"><summary>查看删除的旧代码（旧行号，不用于跳转）</summary><pre>'
         for n, line in deleted:

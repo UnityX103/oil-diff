@@ -46,13 +46,15 @@ class CodePreviewTests(unittest.TestCase):
         self.assertNotIn('url("fonts/', css)
         self.assertIn("SIL OPEN FONT LICENSE", css)
 
-    def test_single_column_complete_source_and_deleted_lines(self):
+    def test_single_column_changed_source_and_deleted_lines(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location("oil_renderer_single", SCRIPTS_DIR / "render_report.py")
         renderer = importlib.util.module_from_spec(spec); spec.loader.exec_module(renderer)
         f = {"path":"x.cs", "beforeText":"start\nold\nend\n", "afterText":"start\nnew\nend\n"}
         output = renderer.single_source_html(f, 2)
-        self.assertIn('data-line="3"', output)
+        self.assertNotIn('data-line="3"', output)
+        self.assertNotIn('data-line="1"', output)
+        self.assertIn('data-line="2"', output)
         self.assertIn('code-line modified', output)
         self.assertIn('deleted-code', output)
         self.assertNotIn('compare-side', output)
