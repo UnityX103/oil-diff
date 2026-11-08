@@ -28,6 +28,31 @@ def run_cmd(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+class CodePreviewTests(unittest.TestCase):
+    def test_source_text_and_rider_tokens(self):
+        import importlib.util
+        import html
+        import re
+        spec = importlib.util.spec_from_file_location("oil_renderer", SCRIPTS_DIR / "render_report.py")
+        renderer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(renderer)
+        source = '    public bool enabled = false; // <safe> & exact'
+        rendered = renderer.syntax_text(source, "Example.cs")
+        self.assertEqual(html.unescape(re.sub(r"<[^>]*>", "", rendered)), source)
+        self.assertIn('class="tok-keyword"', rendered)
+        self.assertIn('class="tok-comment"', rendered)
+        css = renderer.rider_css()
+        self.assertIn("data:font/woff2;base64,", css)
+        self.assertNotIn('url("fonts/', css)
+        self.assertIn("SIL OPEN FONT LICENSE", css)
+
+    def test_drawer_path_is_not_truncated(self):
+        css = (SKILL_ROOT / "assets/report.css").read_text()
+        rule = css.split(".drawer-file-identity strong{", 1)[1].split("}", 1)[0]
+        for value in ("max-width:none", "white-space:normal", "overflow:visible", "overflow-wrap:anywhere"):
+            self.assertIn(value, rule)
+
+
 class OilDiffWorkflowTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()

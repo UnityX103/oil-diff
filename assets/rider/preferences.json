@@ -1,0 +1,63 @@
+{
+  "scheme": "Rider Dark",
+  "configVersion": "Rider2025.2",
+  "fontFamily": "JetBrains Mono",
+  "fontSize": 17,
+  "lineSpacing": 1.2,
+  "fontEmbedded": true,
+  "syntaxHighlighting": "lexical approximation, not Rider semantic analysis",
+  "colors": {
+    "TEXT": {
+      "BACKGROUND": "191A1C",
+      "FOREGROUND": "d0d0d0"
+    },
+    "DIFF_INSERTED": {
+      "BACKGROUND": "29421F",
+      "ERROR_STRIPE_COLOR": "29421F"
+    },
+    "DIFF_MODIFIED": {
+      "BACKGROUND": "3A3070",
+      "ERROR_STRIPE_COLOR": "3A3070"
+    },
+    "DIFF_DELETED": {
+      "BACKGROUND": "424242",
+      "ERROR_STRIPE_COLOR": "424242"
+    },
+    "DEFAULT_KEYWORD": {
+      "FONT_TYPE": "0",
+      "FOREGROUND": "6C95EB"
+    },
+    "DEFAULT_STRING": {
+      "FONT_TYPE": "0",
+      "FOREGROUND": "C9A26D"
+    },
+    "DEFAULT_NUMBER": {
+      "FONT_TYPE": "0",
+      "FOREGROUND": "ED94C0"
+    },
+    "DEFAULT_LINE_COMMENT": {
+      "FONT_TYPE": "2",
+      "FOREGROUND": "85C46C"
+    }
+  },
+  "navigationEditor": "VS Code",
+  "unchangedTextOpacity": 1,
+  "tabSize": 4,
+  "fontLigatures": false,
+  "softWrap": true,
+  "methodColor": "#39CC9B",
+  "typeColor": "#C191FF",
+  "lineNumberColor": "#808080",
+  "addedBorder": "#85C46C",
+  "modifiedBorder": "#A58BE7",
+  "deletedBorder": "#BF3428",
+  "reviewOverlay": {
+    "unchangedColor": "#888888",
+    "addedBackground": "#29421F",
+    "modifiedBackground": "#29421F",
+    "attentionBackground": "#493927",
+    "activeBackground": "#665124",
+    "activeOutline": "#F5D86A"
+  },
+  "navigationMode": "open-project-workspace-and-goto"
+}

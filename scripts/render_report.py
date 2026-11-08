@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from collections import Counter
 import difflib
 import hashlib
@@ -80,6 +81,33 @@ def colored_text(text: str, mask: list[bool]) -> str:
     return "".join(result)
 
 
+def syntax_text(text: str, path: str) -> str:
+    """Small lexical approximation; preserve exact source text and escape markup."""
+    if Path(path).suffix.lower() not in {".cs", ".js", ".ts", ".tsx", ".jsx", ".py", ".json"}:
+        return e(text)
+    pattern = r'(?P<comment>//[^\n]*|/\*.*?\*/)|(?P<string>@?"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\')|(?P<number>\b\d+(?:\.\d+)?\b)|(?P<word>\b[A-Za-z_]\w*\b)'
+    keywords = set("using namespace public private protected internal static sealed class struct enum interface return throw new if else try catch finally true false null void bool int string var get set const readonly override async await for foreach while in is as this base import from def pass None True False function let export extends".split())
+    result = []; start = 0
+    for match in re.finditer(pattern, text):
+        result.append(e(text[start:match.start()]))
+        value = match.group(); kind = match.lastgroup
+        if kind == "word":
+            kind = "keyword" if value in keywords else "method" if text[match.end():].lstrip().startswith("(") else "type" if value[0].isupper() else None
+        result.append(f'<span class="tok-{kind}">{e(value)}</span>' if kind else e(value))
+        start = match.end()
+    return "".join(result) + e(text[start:])
+
+
+def rider_css() -> str:
+    root = ASSETS_DIR / "rider"
+    css = (root / "code-preview.css").read_text(encoding="utf-8")
+    for name in ("JetBrainsMono-Regular.woff2", "JetBrainsMono-Italic.woff2"):
+        encoded = base64.b64encode((root / "fonts" / name).read_bytes()).decode("ascii")
+        css = css.replace("fonts/" + name, "data:font/woff2;base64," + encoded)
+    license_text = (root / "fonts/OFL.txt").read_text(encoding="utf-8").replace("*/", "* /")
+    return "/* Bundled font license: " + license_text + " */\n" + css
+
+
 def comparison_html(before: list[dict[str, object]], after: list[dict[str, object]], f: dict[str, object]) -> str:
     old = "\n".join(str(r["text"]) for r in before)
     new = "\n".join(str(r["text"]) for r in after)
@@ -89,7 +117,7 @@ def comparison_html(before: list[dict[str, object]], after: list[dict[str, objec
             masks[0][i:j] = [True] * (j - i)
             masks[1][k:l] = [True] * (l - k)
 
-    pair = '<div class="compare">'
+    pair = '<div class="compare rider-code-preview">'
     sides = [
         ("old", "修改前", before, str(f.get("from", ""))),
         ("new", "修改后", after, str(f.get("to", ""))),
@@ -119,8 +147,8 @@ def comparison_html(before: list[dict[str, object]], after: list[dict[str, objec
                 if last is not None and line_no != last + 1:
                     pair += '<span class="source-gap">…</span>'
                 mask = masks[index][offset : offset + len(row_text)]
-                changed_cls = " has-change" if any(mask) else ""
-                rendered_code = colored_text(row_text, mask) or " "
+                changed_cls = " has-change" if row.get("changed", any(mask)) else ""
+                rendered_code = syntax_text(row_text, str(f.get("path", "")))
                 pair += (
                     f'<span class="source-line{changed_cls}">'
                     f'<span class="line-number" aria-label="第 {line_no} 行">{line_no}</span>'
@@ -1080,7 +1108,7 @@ def render_report_body(data: dict[str, object], spec: dict[str, object]) -> str:
 
 def render_html_document(data: dict[str, object], spec: dict[str, object]) -> str:
     body_html = render_report_body(data, spec)
-    css_text = (ASSETS_DIR / "report.css").read_text(encoding="utf-8")
+    css_text = rider_css() + "\n" + (ASSETS_DIR / "report.css").read_text(encoding="utf-8")
     js_text = (ASSETS_DIR / "report.js").read_text(encoding="utf-8")
     client_data = {
         "files": [

@@ -103,3 +103,9 @@ metadata:
 ## 输出与停止条件
 
 当 `<output>/index.html` 生成完毕、`scripts/lint_report.py` 输出 `PASS`、且确认目标仓库的 Git 状态无任何新增修改时停止。向用户交付 `<output>/index.html` 的文件路径，并简要列出所归纳的业务事项标题与改动文件统计。
+
+## 路径与代码配色
+
+抽屉标题必须显示完整相对路径，允许任意位置软换行，不继承列表胶囊的限宽、省略号或 nowrap。列表仍保持紧凑。
+
+代码对照区复用已确认的 `rider-code-preview` 配色部分，随本 Skill 保存在 `assets/rider/`（源为 MIDA `.agents/skills/rider-code-preview`）。Rider Dark、内嵌 JetBrains Mono 常规/斜体、17px、1.2 行距、tab 4；未改行灰色，新改行绿色底，删除行灰底，语法为词法近似。页面其它区域仍用暖纸样式。本次集成仅复用配色与字体，保留 oil-diff 前后对照、摘录及补丁导航，不冒称完整文件审阅器。更新配色应先读取现有 rider-code-preview Skill 及其 preferences/render-contract，再同步资源；字体保留 OFL。

@@ -59,3 +59,7 @@
    - 抽屉头部展示所属章节与要点上下文胶囊（`.drawer-context`）、文件图标与完整路径、`← 上一处 / 下一处 →` 切换按钮及 `✕` 关闭按钮；抽屉已打开时切换文件，对内部内容执行 `180ms` 淡入微移过渡。
 3. **可中断 WAAPI 折叠控制器**：
    - 章底外围同步文件折叠条（`details.related-files`）、抽屉内的其余修改（`details.complete-diff`）与文件树目录（`details.tree-folder`）共用 `assets/report.js` 中的可中断 Web Animations API 控制器（展开 `250ms` / 折起 `210ms`），并在 `prefers-reduced-motion: reduce` 下自动切换为瞬时响应。
+
+## 抽屉可读性
+
+完整文件路径软换行，禁止限宽省略。代码区使用 `assets/rider/` 的离线字体和 Rider Dark 配色，未改行灰色、新改行绿底、删除行灰底，17px/1.2；语法着色不改变源文本。该限定区域例外不改变暖纸外框和列表样式。
