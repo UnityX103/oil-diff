@@ -7,6 +7,7 @@ const rows = [...document.querySelectorAll('.tree-file')];
 const targets = report.reading.targets;
 const list = document.querySelector('#tree-scroll');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const mobileViewport = matchMedia('(max-width: 720px)');
 const foldStates = new WeakMap();
 const easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
 let current = 1, selectedPath = '', selectedFileId = '', queued = false, navigation = 0;
@@ -185,6 +186,27 @@ const closeButton = drawer.querySelector('[data-drawer-close]');
 const targetMap = new Map(targets.map(target => [target.id, target]));
 let drawerOpen = false, drawerTarget = null, drawerVersion = 0;
 let slideAnimation = null, shadeAnimation = null, contentAnimations = [], returnFocus = null;
+let desktopTreeCollapsed = document.body.classList.contains('is-tree-collapsed');
+
+function syncMobilePanels() {
+  const treeOpen = !document.body.classList.contains('is-tree-collapsed');
+  document.body.classList.toggle('is-mobile-panel-open', mobileViewport.matches && (treeOpen || drawerOpen));
+  drawer.setAttribute('aria-modal', String(mobileViewport.matches));
+  document.querySelector('.report-main').inert = mobileViewport.matches && (treeOpen || drawerOpen);
+  document.querySelector('.file-sidebar').inert = mobileViewport.matches && drawerOpen;
+  document.querySelector('.tree-reopen-btn').inert = mobileViewport.matches && drawerOpen;
+}
+function setTreeCollapsed(collapsed) {
+  document.body.classList.toggle('is-tree-collapsed', collapsed);
+  for (const button of document.querySelectorAll('[data-tree-toggle]')) {
+    button.setAttribute('aria-expanded', String(!collapsed));
+  }
+  syncMobilePanels();
+}
+setTreeCollapsed(mobileViewport.matches || desktopTreeCollapsed);
+mobileViewport.addEventListener('change', () => {
+  setTreeCollapsed(mobileViewport.matches || desktopTreeCollapsed);
+});
 
 function selectFile(target) {
   for (const card of document.querySelectorAll('.diff-card.is-active')) {
@@ -288,7 +310,10 @@ function moveDrawer(open, {animate = true} = {}) {
     drawerRoot.hidden = !open;
     slideAnimation?.cancel(); shadeAnimation?.cancel();
     slideAnimation = null; shadeAnimation = null;
-    if (!open && returnFocus?.isConnected) returnFocus.focus({preventScroll: true});
+    if (!open && returnFocus?.isConnected) {
+      const target = mobileViewport.matches && returnFocus.closest('.file-sidebar') ? document.querySelector('.tree-reopen-btn') : returnFocus;
+      target.focus({preventScroll: true});
+    }
   };
   if (!animate || reducedMotion.matches) {finish(); return;}
   slideAnimation = drawer.animate([start, {
@@ -309,6 +334,8 @@ function openDrawer(target, trigger, {toggle = false, focus = true} = {}) {
   selectFile(target);
   history.replaceState(null, '', '#' + target.id);
   drawerOpen = true;
+  if (mobileViewport.matches) setTreeCollapsed(true);
+  syncMobilePanels();
   if (!switching) moveDrawer(true);
   if (focus) closeButton.focus({preventScroll: true});
 }
@@ -316,6 +343,7 @@ function closeDrawer() {
   if (!drawerOpen) return;
   ++navigation;
   drawerOpen = false;
+  syncMobilePanels();
   selectFile(null);
   if (location.hash.startsWith('#diff-')) history.replaceState(null, '', '#requirement-' + current);
   moveDrawer(false);
@@ -345,7 +373,12 @@ for (const section of sections) {
 }
 for (const btn of document.querySelectorAll('[data-tree-toggle]')) {
   btn.addEventListener('click', () => {
-    document.body.classList.toggle('is-tree-collapsed');
+    const collapsed = !document.body.classList.contains('is-tree-collapsed');
+    if (!mobileViewport.matches) desktopTreeCollapsed = collapsed;
+    setTreeCollapsed(collapsed);
+    if (mobileViewport.matches) {
+      (collapsed ? document.querySelector('.tree-reopen-btn') : document.querySelector('.tree-toggle-btn')).focus({preventScroll: true});
+    }
   });
 }
 for (const slider of document.querySelectorAll('.shot-slider-input')) {
@@ -391,6 +424,9 @@ addEventListener('keydown', event => {
   if (event.key === 'Escape' && !drawerRoot.hidden) {
     event.preventDefault();
     closeDrawer();
+  } else if (event.key === 'Escape' && mobileViewport.matches && !document.body.classList.contains('is-tree-collapsed')) {
+    setTreeCollapsed(true);
+    document.querySelector('.tree-reopen-btn').focus({preventScroll: true});
   }
 });
 reducedMotion.addEventListener('change', () => {

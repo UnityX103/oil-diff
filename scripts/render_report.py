@@ -1092,10 +1092,10 @@ def render_report_body(data: dict[str, object], spec: dict[str, object]) -> str:
         '<aside class="file-sidebar" id="file-sidebar" aria-label="改动文件树">'
         '<header class="tree-header"><div class="tree-heading">'
         f'<h2>改动文件树</h2><span class="repository-label">{e(repo_label)}</span></div>'
-        '<button type="button" class="tree-toggle-btn" data-tree-toggle title="收起改动文件树" aria-label="收起改动文件树">收起 ⇥</button>'
+        '<button type="button" class="tree-toggle-btn" data-tree-toggle aria-controls="file-sidebar" aria-expanded="true" title="收起改动文件树" aria-label="收起改动文件树">收起 ⇥</button>'
         '</header><div class="tree-scroll" id="tree-scroll">'
         f"{tree_html(tree)}</div></aside>"
-        f'<button type="button" class="tree-reopen-btn" data-tree-toggle title="展开改动文件树" aria-label="展开改动文件树">⇤ 文件树 ({data["uniquePaths"]})</button>'
+        f'<button type="button" class="tree-reopen-btn" data-tree-toggle aria-controls="file-sidebar" aria-expanded="true" title="展开改动文件树" aria-label="展开改动文件树">⇤ 文件树 ({data["uniquePaths"]})</button>'
     )
 
     drawer = (
@@ -1156,7 +1156,7 @@ def render_html_document(data: dict[str, object], spec: dict[str, object]) -> st
         '<html lang="zh-CN">\n'
         "<head>\n"
         '<meta charset="utf-8">\n'
-        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
         '<meta name="color-scheme" content="light">\n'
         f"<title>{e(page_title)}</title>\n"
         '<link rel="icon" href="data:,">\n'

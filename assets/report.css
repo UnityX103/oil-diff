@@ -127,7 +127,6 @@ body.is-tree-collapsed .tree-reopen-btn{display:inline-flex;align-items:center;g
 .overview-nav a,.sticky-chapter-nav a,.diff-card,.diff-file,.drawer-actions button,.complete-diff>summary,.ledger>summary,.related-files>summary{transition:background-color 180ms ease,border-color 180ms ease,box-shadow 200ms ease,transform 180ms var(--ease),color 180ms ease}
 @media(max-width:1320px){.report-layout{grid-template-columns:minmax(0,1fr) 240px;gap:16px}.paper-card{padding:24px}}
 @media(max-width:1050px){.report-layout{width:calc(100% - 36px);grid-template-columns:minmax(0,1fr) 224px;gap:14px;margin-top:20px}.paper-card{padding:20px}.tree-header{padding-left:10px;padding-right:10px}.tree-scroll{padding-left:6px;padding-right:6px}.sticky-chapter-nav{padding-left:8px;padding-right:8px;gap:1px}.sticky-chapter-nav a{font-size:10.5px;gap:4px;padding:6px 3px}}
-@media(max-width:720px){.report-layout{width:calc(100% - 24px);display:flex;flex-direction:column;gap:22px;margin:16px auto 32px}.report-main{width:100%}.paper-card{padding:22px 18px}.file-sidebar{position:relative;top:auto;width:100%;height:min(70dvh,520px);order:-1}.tree-header{padding:12px}.tree-scroll{padding-left:10px;padding-right:10px}.intro h1{font-size:26px}.section-header h2{font-size:20px}.diff-file{gap:8px;padding:10px}.file-identity{flex-wrap:wrap;gap:5px}.file-identity strong{font-size:10.5px}.file-explanation{margin-left:0}.diff-controls{gap:5px}.diff-controls .line-count{font-size:10px}.overview-nav a{padding:8px 4px;gap:8px}.ledger-file{font-size:10px}.ledger td{font-size:10px;padding:8px 3px}.related-file-list .file-identity strong{font-size:10.5px}.related-files>summary small{display:none}.sticky-chapter-nav a{flex:none;padding:6px 8px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important;animation:none!important}}
 
 /* The comparison drawer is outside the reading layout and never changes its geometry. */
@@ -370,7 +369,6 @@ body.is-tree-collapsed .tree-reopen-btn{display:inline-flex;align-items:center;g
 .rider-code-preview .empty-copy{color:#aaa}
 
 /* Single-column source review: keep authored line breaks and scroll horizontally. */
-@media(max-width:720px){.diff-drawer{width:calc(100vw - 16px);right:8px;top:8px;bottom:8px}}
 .single-source{min-width:0;background:#191a1c;border-radius:7px;padding:10px}
 .single-source pre{white-space:pre;overflow-wrap:normal;overflow-x:auto;border-radius:4px;padding:12px 0}
 .single-source .code-line{display:block;width:max-content;min-width:100%;box-sizing:border-box;white-space:pre;overflow-wrap:normal;scroll-margin-block:100px}
@@ -384,3 +382,86 @@ body.is-tree-collapsed .tree-reopen-btn{display:inline-flex;align-items:center;g
 
 .vscode-open{border:1px solid #e2d7c3;background:transparent;color:#7b6237;padding:7px 12px;border-radius:5px;font:500 12px/1.6 var(--sans);cursor:pointer}
 .vscode-open:hover:not([aria-disabled=true]){background:#f2e7d0;border-color:#d6bc88}
+
+/* Phone preview: keep the report readable and open auxiliary panels on demand. */
+@media(max-width:720px){
+  html{scroll-padding-top:64px;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  body.is-mobile-panel-open{overflow:hidden}
+  .report-layout{width:auto;display:block;margin:12px max(12px,env(safe-area-inset-right)) 76px max(12px,env(safe-area-inset-left))}
+  .report-main{width:100%}
+  .paper-card{padding:18px 14px}
+  .eyebrow,.header-controls,.report-meta,.section-header,.changes{min-width:0;max-width:100%;overflow-wrap:anywhere}
+  .intro h1{font-size:23px;overflow-wrap:anywhere}
+  .intro>p{font-size:15px}
+  .report-meta>span,.report-meta>code{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+  .overview-nav{grid-template-columns:1fr}
+  .overview-nav a{min-height:48px;padding:10px;gap:4px 8px}
+  .nav-label{white-space:normal;overflow-wrap:anywhere;font-size:13px}
+  .sticky-chapter-nav a{flex:none;min-height:44px;padding:8px 10px;font-size:12px}
+  .bento-deck{grid-template-columns:minmax(0,1fr);gap:14px}
+  .requirement{min-width:0}
+  .section-header h2,.requirement.is-hero .section-header h2{font-size:19px;overflow-wrap:anywhere}
+  .chapter-topline{flex-wrap:wrap}
+  .module-badge{white-space:normal;overflow-wrap:anywhere}
+  .chapter-overview{font-size:14px}
+  .change-point h3{align-items:flex-start;font-size:14px;overflow-wrap:anywhere}
+  .point-pills{padding-left:0}
+  .diff-file{min-height:44px;width:100%;gap:6px;padding:8px}
+  .diff-summary-copy{flex:1;overflow:hidden}
+  .file-identity{max-width:100%}
+  .file-identity strong{font-size:12px}
+  .diff-controls{flex:none;gap:4px}
+  .related-files>summary{min-height:44px}
+  .sync-names{overflow-wrap:anywhere}
+  .page-footer{flex-wrap:wrap;overflow-wrap:anywhere}
+  .page-footer a{display:inline-flex;align-items:center;min-height:44px}
+  .diagram{padding:10px;overflow:auto;overscroll-behavior-x:contain}
+  .visual-stage{overflow-wrap:anywhere}
+  .vis-grid-2,.vis-grid-3,.vis-pair,.shot-pair-grid,.schema-diff,.scenario-grid,.alignment-grid,.workspace-comparison,
+  .requirement:not(.is-hero) .domain-map,.domain-map{grid-template-columns:minmax(0,1fr)}
+  .requirement:not(.is-hero) .vis-pair-stack{grid-template-columns:1fr}
+  .pipe-row,.requirement:not(.is-hero) .pipe-row{grid-template-columns:minmax(0,1fr);gap:6px}
+  .pipe-node{white-space:normal;overflow-wrap:anywhere}
+  .pipe-badge{justify-self:start;white-space:normal}
+  .schema-row{flex-wrap:wrap}
+  .file-sidebar{position:fixed;z-index:60;inset:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));width:auto;height:auto;max-height:none}
+  .tree-header{padding:10px}
+  .tree-heading{flex-wrap:wrap}
+  .tree-toggle-btn,.tree-file,.tree-folder>summary{min-height:44px;height:auto}
+  .tree-file-name,.tree-folder>summary{font-size:12px}
+  .tree-folder>summary>span{overflow-wrap:anywhere}
+  .tree-children{margin-left:5px;padding-left:3px}
+  .tree-reopen-btn{top:auto;right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));min-height:44px}
+  .diff-drawer-root{overflow:hidden}
+  .diff-drawer{inset:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));width:auto;max-width:none}
+  .drawer-header{padding:10px 12px}
+  .drawer-toolbar{flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .drawer-label{font-size:12px}
+  .drawer-actions{width:100%;gap:6px}
+  .drawer-actions button{flex:1;min-height:44px;padding:6px;font-size:12px}
+  .drawer-actions .drawer-close{flex:none;min-width:44px;width:44px;margin-left:0}
+  .drawer-information{max-height:20dvh;overflow:auto;overscroll-behavior:contain}
+  .drawer-context{margin-bottom:6px}
+  .drawer-file-heading{flex-wrap:wrap;gap:4px}
+  .drawer-file-identity{flex-basis:100%}
+  .drawer-file-identity strong{font-size:12px}
+  .drawer-body{padding:10px;min-width:0}
+  .single-source{padding:6px}
+  .single-source pre{overscroll-behavior-x:contain}
+  .single-source .review-nav{padding:4px;gap:6px}
+  .single-source .review-nav button{flex:1;min-height:44px;padding:6px;font-size:12px}
+  .single-source .review-nav output{flex-basis:100%;overflow-wrap:anywhere}
+  .single-source button.line-number{min-width:44px;min-height:44px;margin-right:1ch}
+  .deleted-code summary{min-height:44px;white-space:normal}
+  .drawer-footer{padding:8px 12px;gap:4px;max-height:25%;overflow:auto;overflow-wrap:anywhere}
+  .vscode-open{display:inline-flex;align-items:center;min-height:44px;max-width:100%;font-family:var(--reader-family)}
+  .shot-slider-knob{width:44px;height:44px}
+  .shot-slider-input{touch-action:pan-y}
+  .shot-zoom-link,.shot-lightbox-close{min-height:44px}
+  .shot-slider-foot{grid-template-columns:1fr}
+  .shot-lightbox{padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+  .shot-lightbox img{max-width:100%;max-height:70dvh}
+  .shot-lightbox-bar{width:100%;justify-content:space-between;gap:8px}
+  .shot-lightbox-caption{min-width:0;overflow-wrap:anywhere}
+  .shot-lightbox-close{flex:none}
+}
