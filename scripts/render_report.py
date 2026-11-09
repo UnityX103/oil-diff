@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import base64
 from collections import Counter
 import difflib
@@ -108,6 +109,207 @@ def rider_css() -> str:
     return "/* Bundled font license: " + license_text + " */\n" + css
 
 
+CODE_SUFFIXES = {".py", ".cs", ".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".c", ".h", ".cc", ".cpp", ".cxx", ".hpp", ".kt", ".swift", ".php", ".rb", ".lua"}
+
+
+def mask_source_literals(text: str, path: str) -> str:
+    """Keep line/character positions while ignoring braces in comments and literals."""
+    chars = list(text)
+    i = 0
+    javascript = Path(path).suffix.lower() in {".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx"}
+    while i < len(text):
+        end = i
+        if text.startswith("//", i):
+            end = text.find("\n", i)
+            if end < 0:
+                end = len(text)
+        elif text.startswith("/*", i):
+            closing = text.find("*/", i + 2)
+            if closing < 0:
+                raise ValueError("Unterminated block comment")
+            end = closing + 2
+        elif text[i] == '"' and text.startswith('"""', i):
+            count = len(text[i:]) - len(text[i:].lstrip('"'))
+            closing = text.find('"' * count, i + count)
+            if closing < 0:
+                raise ValueError("Unterminated raw string")
+            end = closing + count
+        elif text[i] in {'"', '`'} or (text[i] == "'" and (Path(path).suffix.lower() != '.rs' or re.match(r"'(?:\\.|[^'\\\n])'", text[i:]))):
+            quote = text[i]
+            verbatim = quote == '"' and i > 0 and text[i - 1] == '@'
+            end = i + 1
+            while end < len(text):
+                if verbatim and text.startswith('""', end):
+                    end += 2
+                elif not verbatim and text[end] == '\\':
+                    end += 2
+                elif text[end] == quote:
+                    end += 1
+                    break
+                else:
+                    end += 1
+            else:
+                raise ValueError("Unterminated string")
+            interpolated = (javascript and quote == '`' and '${' in text[i + 1:end - 1]) or (quote == '"' and text[max(0, i - 2):i].rstrip('@').endswith('$'))
+            if interpolated:
+                depth, n = 0, i + 1
+                while n < end - 1:
+                    if text[n] == '\\':
+                        n += 2
+                        continue
+                    if quote == '`' and not depth:
+                        if text.startswith('${', n):
+                            depth = 1
+                            n += 2
+                        else:
+                            n += 1
+                        continue
+                    if not depth and (text.startswith('{{', n) or text.startswith('}}', n)):
+                        n += 2
+                        continue
+                    if text[n] == '{':
+                        depth += 1
+                    elif text[n] == '}':
+                        depth -= 1
+                    n += 1
+                if depth:
+                    # Nested quoted/template expressions need a real language parser.
+                    # Never interpret their braces as the surrounding method's end.
+                    raise ValueError("Unsupported nested interpolation")
+        elif javascript and text[i] == '/' and (
+            not text[:i].rstrip() or text[:i].rstrip()[-1] in '=(:,[!&|?{;'
+            or re.search(r'\b(?:return|throw|case|yield)\s*$', text[:i])
+        ):
+            # A regular-expression literal can contain braces and escaped slashes.
+            end, bracket = i + 1, False
+            while end < len(text) and text[end] != '\n':
+                char = text[end]
+                if char == '\\':
+                    end += 2
+                    continue
+                if char == '[':
+                    bracket = True
+                elif char == ']':
+                    bracket = False
+                elif char == '/' and not bracket:
+                    end += 1
+                    break
+                end += 1
+            else:
+                end = i  # Division or unsupported syntax: retain it for conservative fallback.
+        elif javascript and text[i] == '/':
+            remainder = text[i + 1:].split('\n', 1)[0]
+            if '/' in remainder and any(c in remainder.split('/', 1)[0] for c in '{}'):
+                raise ValueError("Ambiguous regular-expression boundary")
+        if end > i:
+            for n in range(i, min(end, len(chars))):
+                if chars[n] not in '\r\n':
+                    chars[n] = ' '
+            i = end
+        else:
+            i += 1
+    return ''.join(chars)
+
+
+def callable_header(header: str) -> bool:
+    """Recognize declarations, excluding types, control blocks and object initializers."""
+    if re.search(r'\b(?:class|struct|interface|namespace|enum|record)\b', header):
+        return False
+    control = {'if', 'for', 'foreach', 'while', 'switch', 'catch', 'using', 'lock', 'fixed', 'checked', 'unchecked', 'new', 'return', 'throw', 'typeof', 'nameof', 'sizeof', 'default', 'synchronized', 'when', 'match'}
+    if header.rstrip().endswith('=>'):
+        prefix = header.rsplit('=>', 1)[0]
+        return prefix.count('(') == prefix.count(')') and not re.match(r'^\s*(?:if|for|while|switch)\b', prefix)
+    parens = brackets = 0
+    found = False
+    for i, char in enumerate(header):
+        if char == '[':
+            brackets += 1
+        elif char == ']':
+            brackets -= 1
+        elif char == '(':
+            if not parens and not brackets:
+                match = re.search(r'([A-Za-z_$][\w$]*)\s*(?:<[^;{}]*>)?\s*$', header[:i])
+                if match and match.group(1) not in control:
+                    prefix = header[:match.start()]
+                    if not prefix.rstrip().endswith(('.', '@')) and ('=' not in prefix or re.search(r'\bfunction\b', prefix)):
+                        found = True
+            parens += 1
+        elif char == ')':
+            parens -= 1
+    return found and parens == 0 and brackets == 0
+
+
+def method_spans(text: str, path: str) -> list[tuple[int, int]]:
+    """Return zero-based, end-exclusive declaration/body line ranges, never hunk bounds."""
+    if Path(path).suffix.lower() == '.py':
+        tree = ast.parse(text)
+        return [
+            (min([node.lineno] + [d.lineno for d in node.decorator_list]) - 1, node.end_lineno)
+            for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        ]
+    masked = mask_source_literals(text, path)
+    spans = []
+    # Each lexical block owns its current declaration/statement start.
+    stack = []
+    start = parens = 0
+    for i, char in enumerate(masked):
+        if char == '(':
+            parens += 1
+        elif char == ')':
+            parens -= 1
+        elif char == '{':
+            header = masked[start:i]
+            first = start + len(header) - len(header.lstrip())
+            stack.append((first, callable_header(header)))
+            start = i + 1
+        elif char == '}':
+            if not stack:
+                raise ValueError("Unbalanced source braces")
+            first, callable_block = stack.pop()
+            if callable_block:
+                spans.append((text.count('\n', 0, first), text.count('\n', 0, i) + 1))
+            start = i + 1
+        elif char == ';' and not parens:
+            header = masked[start:i]
+            if '=>' in header and callable_header(header.split('=>', 1)[0]):
+                first = start + len(header) - len(header.lstrip())
+                spans.append((text.count('\n', 0, first), text.count('\n', 0, i) + 1))
+            start = i + 1
+    if stack or parens:
+        raise ValueError("Unbalanced source delimiters")
+    return spans
+
+
+def source_context_lines(before: str, after: str, path: str, opcodes: list[tuple]) -> tuple[set[int], bool]:
+    """Expand every changed operation; uncertain code boundaries retain the full snapshot."""
+    changed = {n for tag, _, _, k, l in opcodes if tag != 'equal' for n in range(k, l)}
+    if Path(path).suffix.lower() not in CODE_SUFFIXES:
+        return changed, False
+    try:
+        spans = method_spans(after, path)
+        previous = method_spans(before, path)
+    except (SyntaxError, ValueError, RecursionError):
+        return set(range(len(after.splitlines()))), True
+    selected = set()
+    for tag, i, j, k, l in opcodes:
+        if tag == 'equal':
+            continue
+        anchors = set(range(k, l))
+        if tag == 'delete':
+            # A removed statement still changes the surviving method. A removed entire
+            # method belongs only in the old-code fold, not in the next unrelated method.
+            owners = [(a, b) for a, b in previous if a < j and i < b]
+            if owners and all(i <= a and b <= j for a, b in owners):
+                continue
+            anchors = {max(0, k - 1), min(k, max(0, len(after.splitlines()) - 1))}
+        owners = [(a, b) for a, b in spans if any(a <= n < b for n in anchors)]
+        if not owners:
+            return set(range(len(after.splitlines()))), True
+        for a, b in owners:
+            selected.update(range(a, b))
+    return selected, False
+
+
 def single_source_html(f: dict[str, object], focus: int = 1) -> str:
     if f.get("binary"):
         return '<p class="empty-copy">二进制文件，不展示源码。</p>'
@@ -117,26 +319,30 @@ def single_source_html(f: dict[str, object], focus: int = 1) -> str:
     after = str(f["afterText"]).splitlines()
     states = ["unchanged"] * len(after)
     deleted = []
-    for tag, i, j, k, l in difflib.SequenceMatcher(None, before, after, autojunk=False).get_opcodes():
+    opcodes = difflib.SequenceMatcher(None, before, after, autojunk=False).get_opcodes()
+    visible, full_file = source_context_lines(str(f.get("beforeText", "")), str(f["afterText"]), str(f["path"]), opcodes)
+    for tag, i, j, k, l in opcodes:
         if tag in ("insert", "replace"):
             states[k:l] = ["added" if tag == "insert" else "modified"] * (l-k)
         if tag in ("delete", "replace"):
             deleted.extend((n + 1, before[n]) for n in range(i, j))
     out = '<section class="rider-code-preview single-source" data-focus-line="' + str(focus) + '">'
-    out += '<div class="diff-legend"><span class="added">绿色：新增／修改</span><span class="deleted">删除：见下方</span></div>'
+    out += '<div class="diff-legend"><span class="added">绿色：新增／修改</span><span class="unchanged">灰色：方法上下文</span><span class="deleted">删除：见下方</span></div>'
+    if full_file:
+        out += '<p class="empty-copy">无法可靠识别完整方法边界，显示完整目标文件。</p>'
     out += '<div class="review-nav"><button type="button" data-code-prev>↑ 上一处改动</button><button type="button" data-code-next>↓ 下一处改动</button><output aria-live="polite" data-code-position></output></div>'
-    out += '<pre class="source-code" tabindex="0" aria-label="新增和修改后的代码段">'
+    out += '<pre class="source-code" tabindex="0" aria-label="新增或修改操作的完整方法体">'
     previous_line = None
     for n, (line, state) in enumerate(zip(after, states), 1):
-        if state == "unchanged":
+        if n - 1 not in visible:
             continue
         if previous_line is not None and n > previous_line + 1:
-            out += '<span class="source-gap" aria-label="省略未改代码">⋯</span>'
+            out += '<span class="source-gap" aria-label="省略无关方法或文件内容">⋯</span>'
         previous_line = n
         out += f'<span class="code-line {state}" data-line="{n}" data-state="{state}"><button type="button" class="line-number" data-select-line="{n}" aria-label="选择第 {n} 行">{n}</button><span class="line-text">{syntax_text(line, str(f["path"]))}</span></span>'
     out += '</pre>'
     if previous_line is None:
-        out += '<p class="empty-copy">本文件没有新增或修改后的代码段；删除内容见下方，不提供旧行跳转。</p>'
+        out += '<p class="empty-copy">本文件没有保留的目标方法或新增行；删除内容见下方，不提供旧行跳转。</p>'
     if deleted:
         out += '<details class="deleted-code"><summary>查看删除的旧代码（旧行号，不用于跳转）</summary><pre>'
         for n, line in deleted:

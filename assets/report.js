@@ -232,7 +232,7 @@ function configureSourceNavigation(target) {
   const lines = [...source.querySelectorAll('.source-code [data-line]')];
   const focus = Number(source.dataset.focusLine) || 1;
   const stations = lines.filter((line, i) => line.dataset.state !== 'unchanged' &&
-    (!i || Number(line.dataset.line) !== Number(lines[i-1].dataset.line) + 1));
+    (!i || lines[i-1].dataset.state === 'unchanged' || Number(line.dataset.line) !== Number(lines[i-1].dataset.line) + 1));
   let position = -1;
   const select = (line, scroll) => {
     source.querySelectorAll('.review-active').forEach(el => el.classList.remove('review-active'));
@@ -261,7 +261,7 @@ function configureSourceNavigation(target) {
     });
   }
   if (!lines.length) status.textContent = '没有新增目标行可定位';
-  select(lines.find(el => Number(el.dataset.line) === focus) || lines[0], false);
+  select(lines.find(el => Number(el.dataset.line) === focus && el.dataset.state !== 'unchanged') || stations[0] || lines.find(el => Number(el.dataset.line) === focus) || lines[0], false);
 }
 
 function populateDrawer(target, switching) {

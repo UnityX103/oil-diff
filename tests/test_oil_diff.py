@@ -50,7 +50,7 @@ class CodePreviewTests(unittest.TestCase):
         import importlib.util
         spec = importlib.util.spec_from_file_location("oil_renderer_single", SCRIPTS_DIR / "render_report.py")
         renderer = importlib.util.module_from_spec(spec); spec.loader.exec_module(renderer)
-        f = {"path":"x.cs", "beforeText":"start\nold\nend\n", "afterText":"start\nnew\nend\n"}
+        f = {"path":"x.md", "beforeText":"start\nold\nend\n", "afterText":"start\nnew\nend\n"}
         output = renderer.single_source_html(f, 2)
         self.assertNotIn('data-line="3"', output)
         self.assertNotIn('data-line="1"', output)
@@ -60,6 +60,190 @@ class CodePreviewTests(unittest.TestCase):
         self.assertNotIn('compare-side', output)
         self.assertIn('data-focus-line="2"', output)
         with self.assertRaises(ValueError): renderer.single_source_html({"path":"legacy.cs"})
+
+    def render_method_change(self, path, before, after):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("oil_renderer_methods", SCRIPTS_DIR / "render_report.py")
+        renderer = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(renderer)
+        return renderer.single_source_html({"path": path, "beforeText": before, "afterText": after})
+
+    def visible_rows(self, output):
+        """Extract exact target source text, excluding line-number buttons and old code."""
+        from html.parser import HTMLParser
+        class Rows(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.rows = {}
+                self.line = None
+                self.depth = 0
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if 'data-line' in attrs:
+                    self.line = int(attrs['data-line'])
+                if self.depth:
+                    self.depth += 1
+                elif attrs.get('class') == 'line-text' and self.line is not None:
+                    self.depth = 1
+                    self.rows[self.line] = ''
+            def handle_endtag(self, tag):
+                if self.depth:
+                    self.depth -= 1
+            def handle_data(self, data):
+                if self.depth:
+                    self.rows[self.line] += data
+        parser = Rows()
+        parser.feed(output.split('<details class="deleted-code">', 1)[0])
+        return parser.rows
+
+    def test_csharp_preview_keeps_complete_changed_method_and_excludes_neighbors(self):
+        before = '''class Demo
+{
+    public void Update()
+    {
+        Prepare();
+        if (ready)
+        {
+            RunOld();
+        }
+        Finish();
+    }
+
+    public void Unrelated()
+    {
+        LeaveAlone();
+    }
+}
+'''
+        after = before.replace('RunOld();', 'RunNew();')
+        output = self.render_method_change('Demo.cs', before, after)
+        rows = self.visible_rows(output)
+        self.assertEqual(list(rows), list(range(3, 12)))
+        self.assertEqual(list(rows.values()), after.splitlines()[2:11])
+        self.assertIn('data-line="5" data-state="unchanged"', output)
+        self.assertIn('data-line="8" data-state="modified"', output)
+        self.assertNotIn('LeaveAlone', output)
+
+    def test_python_decorators_multiline_signature_and_nested_operation(self):
+        before = '''@trace("context")
+async def load(
+    path: str,
+):
+    def normalize(value):
+        return value.strip()
+    result = normalize(path)
+    return result
+
+def unrelated():
+    return "keep hidden"
+'''
+        after = before.replace('value.strip()', 'value.strip().lower()')
+        rows = self.visible_rows(self.render_method_change('example.py', before, after))
+        self.assertEqual(list(rows), list(range(1, 9)))
+        self.assertEqual(list(rows.values()), after.splitlines()[:8])
+
+    def test_multiple_changed_methods_are_complete_without_duplicate_context(self):
+        before = '''class Demo {
+    void First() {
+        Prepare();
+        OldFirst();
+        Finish();
+    }
+    void Hidden() {
+        Ignore();
+    }
+    void Second() {
+        Prepare();
+        OldSecond();
+        Finish();
+    }
+}
+'''
+        after = before.replace('OldFirst()', 'NewFirst()').replace('OldSecond()', 'NewSecond()')
+        output = self.render_method_change('Demo.cs', before, after)
+        rows = self.visible_rows(output)
+        self.assertEqual(list(rows), list(range(2, 7)) + list(range(10, 15)))
+        self.assertEqual(output.count('省略无关方法或文件内容'), 1)
+
+    def test_deleting_statement_keeps_surviving_method_but_deleted_method_stays_old(self):
+        before = '''class Demo {
+    void First() {
+        Prepare();
+        Remove();
+        Finish();
+    }
+    void Second() {
+        Unrelated();
+    }
+}
+'''
+        after = before.replace('        Remove();\n', '')
+        rows = self.visible_rows(self.render_method_change('Demo.cs', before, after))
+        self.assertEqual(list(rows), list(range(2, 6)))
+        after = before.replace('    void First() {\n        Prepare();\n        Remove();\n        Finish();\n    }\n', '')
+        self.assertEqual(self.visible_rows(self.render_method_change('Demo.cs', before, after)), {})
+
+    def test_new_method_includes_full_signature_and_body(self):
+        before = 'class Demo {\n}\n'
+        after = 'class Demo {\n    public void Added() {\n        Prepare();\n        Run();\n    }\n}\n'
+        rows = self.visible_rows(self.render_method_change('Demo.cs', before, after))
+        self.assertEqual(list(rows.values()), after.splitlines()[1:5])
+
+    def test_braces_in_comments_strings_and_js_regex_do_not_cut_methods(self):
+        samples = {
+            'Demo.cs': '''class Demo {
+    [Trace("}")]
+    public void Run() {
+        var example = @"}""{";
+        // } misleading brace
+        /* { misleading brace */
+        Old();
+        Finish();
+    }
+    void Hidden() { Ignore(); }
+}
+''',
+            'demo.js': '''const run = (input) => {
+    const pattern = /[{}]/g;
+    const sample = '}' + '{';
+    Old();
+    return input.replace(pattern, sample);
+};
+function hidden() { return 0; }
+''',
+        }
+        for path, before in samples.items():
+            with self.subTest(path=path):
+                after = before.replace('Old()', 'New()')
+                output = self.render_method_change(path, before, after)
+                rows = self.visible_rows(output)
+                self.assertNotIn('无法可靠识别', output)
+                self.assertIn('Finish();' if path.endswith('.cs') else 'return input.replace(pattern, sample);', '\n'.join(rows.values()))
+                self.assertNotIn('Ignore();' if path.endswith('.cs') else 'function hidden', '\n'.join(rows.values()))
+
+    def test_expression_method_and_unsupported_code_fallback_preserve_full_body(self):
+        before = 'class Demo {\n    int Count() =>\n        Old();\n    void Hidden() { Ignore(); }\n}\n'
+        after = before.replace('Old()', 'New()')
+        rows = self.visible_rows(self.render_method_change('Demo.cs', before, after))
+        self.assertEqual(list(rows.values()), after.splitlines()[1:3])
+        before = 'def run\n  prepare\n  old\n  finish\nend\n'
+        after = before.replace('old', 'updated')
+        output = self.render_method_change('demo.rb', before, after)
+        self.assertIn('无法可靠识别完整方法边界', output)
+        self.assertEqual(list(self.visible_rows(output).values()), after.splitlines())
+
+    def test_nested_interpolation_never_truncates_changed_method(self):
+        samples = {
+            'Demo.cs': 'class Demo {\n void Run() {\n  var value = $"Value {Call(\"}\", \"{\")}";\n  Finish();\n }\n}\n',
+            'demo.js': 'function run() {\n const value = `outer ${fn(`nested }`, "{")}`;\n Finish();\n}\n',
+            'regex.js': 'function run() {\n if (ready) /}{/.test(value);\n Finish();\n}\n',
+        }
+        for path, before in samples.items():
+            with self.subTest(path=path):
+                after = before.replace('value =', 'updated =').replace('test(value)', 'test(updated)')
+                output = self.render_method_change(path, before, after)
+                self.assertIn('无法可靠识别完整方法边界', output)
+                self.assertEqual(list(self.visible_rows(output).values()), after.splitlines())
 
     def test_drawer_path_is_not_truncated(self):
         css = (SKILL_ROOT / "assets/report.css").read_text()
