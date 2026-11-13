@@ -30,6 +30,12 @@ function openingAncestors(details) {
 function runFold(details, expanded, animate) {
   const state = stateFor(details);
   const content = details.querySelector(':scope > [data-fold-content]');
+  // Older reports and custom details may not have an animation container.
+  if (!content) {
+    details.open = expanded;
+    details.classList.remove('is-closing');
+    return Promise.resolve();
+  }
   const wasOpen = details.open;
   const startHeight = wasOpen ? content.getBoundingClientRect().height : 0;
   const style = wasOpen ? getComputedStyle(content) : null;
@@ -122,8 +128,11 @@ function updateTree() {
     const file = sourceFiles.get(target.fileId);
     row.classList.toggle('is-current', matches);
     row.classList.toggle('is-muted', !matches);
-    row.querySelector('.line-count b').textContent = '+' + file.add;
-    row.querySelector('.line-count i').textContent = '−' + file.delete;
+    // Path-only resources show a label instead of numeric count nodes.
+    const additions = row.querySelector('.line-count b');
+    const deletions = row.querySelector('.line-count i');
+    if (additions) additions.textContent = '+' + file.add;
+    if (deletions) deletions.textContent = '−' + file.delete;
     row.title = path.path + ' · ' + file.from + ' → ' + file.to;
     if (path.path === selectedPath) row.setAttribute('aria-current', 'location');
     else row.removeAttribute('aria-current');

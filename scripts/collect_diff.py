@@ -10,6 +10,8 @@ import re
 import subprocess
 import sys
 
+from report_support import build_summary, is_path_only
+
 if sys.version_info < (3, 10):
     raise SystemExit("Python 3.10+ is required to run collect_diff.py.")
 
@@ -110,7 +112,12 @@ def collect_range_changes(repo: Path, before_rev: str, after_rev: str) -> tuple[
             target = repo / path
             if target.is_symlink() or not target.is_file():
                 continue
-            raw_head = target.read_bytes()[:8192]
+            if is_path_only(path):
+                stats[path] = {"add": 0, "delete": 0, "binary": 0, "countsKnown": 0}
+                statuses[path] = "A"
+                continue
+            with target.open("rb") as stream:
+                raw_head = stream.read(8192)
             if b"\x00" in raw_head:
                 stats[path] = {"add": 0, "delete": 0, "binary": 1}
             else:
@@ -198,7 +205,7 @@ def collect_diff(repo: Path, out_dir: Path, range_specs: list[str] | None = None
 
     files: list[dict[str, object]] = []
     ranges_meta: dict[str, dict[str, str]] = {}
-    code_suffixes = (".py", ".js", ".mjs", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java")
+    code_suffixes = (".py", ".js", ".mjs", ".ts", ".tsx", ".jsx", ".go", ".rs", ".java", ".cs")
 
     for scope, label, from_rev, to_rev in parsed_ranges:
         from_short = resolve_short_rev(repo, from_rev)
@@ -208,7 +215,9 @@ def collect_diff(repo: Path, out_dir: Path, range_specs: list[str] | None = None
         for path, nums in stats.items():
             kind = statuses.get(path, "M")
             is_binary = bool(nums.get("binary"))
-            if is_binary:
+            path_only = is_path_only(path)
+            old_src = new_src = ""
+            if is_binary or path_only:
                 chunks: list[dict[str, object]] = []
             else:
                 old_src = read_source(repo, from_rev, path)
@@ -223,13 +232,14 @@ def collect_diff(repo: Path, out_dir: Path, range_specs: list[str] | None = None
                     "status": status_label(scope, kind, to_rev),
                     "kind": kind,
                     "binary": is_binary,
+                    "contentMode": "path-only" if path_only else "binary" if is_binary else "text",
+                    "countsKnown": bool(nums.get("countsKnown", True)),
                     "add": nums["add"],
                     "delete": nums["delete"],
                     "from": from_short,
                     "to": to_short,
                     "chunks": chunks,
-                    "beforeText": "" if is_binary else old_src,
-                    "afterText": "" if is_binary else new_src,
+                    **({} if path_only else {"beforeText": old_src, "afterText": new_src}),
                 }
             )
 
@@ -244,6 +254,9 @@ def collect_diff(repo: Path, out_dir: Path, range_specs: list[str] | None = None
     }
     output_file = assets_dir / "diff-data.json"
     output_file.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    (assets_dir / "change-summary.json").write_text(
+        json.dumps(build_summary(data), ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     return data
 
 
@@ -265,6 +278,7 @@ def main() -> int:
         json.dumps(
             {
                 "output": str(out_dir / "assets" / "diff-data.json"),
+                "summary": str(out_dir / "assets" / "change-summary.json"),
                 "fileRecords": len(data["files"]),
                 "uniquePaths": data["uniquePaths"],
             },

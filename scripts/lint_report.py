@@ -10,6 +10,8 @@ import re
 import subprocess
 import sys
 
+from report_support import expand_spec, is_path_only
+
 if sys.version_info < (3, 10):
     raise SystemExit("Python 3.10+ is required to run lint_report.py.")
 
@@ -140,6 +142,15 @@ def lint_report(repo: Path, report_dir: Path) -> tuple[list[str], list[str]]:
     data = json.loads(data_path.read_text(encoding="utf-8"))
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
     html = html_path.read_text(encoding="utf-8")
+    try:
+        spec = expand_spec(data, spec)
+    except ValueError as exc:
+        return [str(exc)], warnings
+    if spec.get("_draft") or "__FILL__" in json.dumps(spec, ensure_ascii=False):
+        errors.append("Unfinished report template: fill __FILL__ fields and remove _draft.")
+    for file in data.get("files", []):
+        if is_path_only(file) and any(file.get(key) for key in ("chunks", "beforeText", "afterText")):
+            errors.append(f"Prefab content must not be collected; recollect this report: {file['id']}")
 
     # 1. File coverage check
     all_file_ids = {str(f["id"]) for f in data.get("files", [])}

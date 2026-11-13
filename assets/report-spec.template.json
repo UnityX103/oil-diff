@@ -1,0 +1,22 @@
+{
+  "_draft": true,
+  "title": "__FILL__ 本轮改动汇报标题",
+  "summary": "__FILL__ 一两句话概括本轮业务改动，不推测未知的原因。",
+  "items": [
+    {
+      "module": "__FILL__ 业务模块",
+      "title": "__FILL__ 模块与具体机制变化",
+      "overview": "__FILL__ 原来怎样，现在怎样；仅资源变动时说明只列目标。",
+      "files": ["*"],
+      "diagram": {
+        "type": "scenarios",
+        "cards": [
+          {"title": "__FILL__ 主题", "before": "__FILL__ 旧行为短标签", "after": "__FILL__ 新行为短标签"}
+        ]
+      },
+      "points": [
+        {"title": "__FILL__ 一个具体改法或重要资源目标", "files": []}
+      ]
+    }
+  ]
+}

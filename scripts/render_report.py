@@ -14,6 +14,8 @@ from pathlib import Path, PurePosixPath
 import re
 import sys
 
+from report_support import expand_spec, is_path_only
+
 if sys.version_info < (3, 10):
     raise SystemExit("Python 3.10+ is required to run render_report.py.")
 
@@ -66,6 +68,8 @@ def file_icon(path: str) -> str:
 
 
 def counts_html(f: dict[str, object]) -> str:
+    if is_path_only(f):
+        return '<span class="line-count">仅列目标</span>'
     return f'<span class="line-count"><b>+{f["add"]}</b><i>−{f["delete"]}</i></span>'
 
 
@@ -311,6 +315,8 @@ def source_context_lines(before: str, after: str, path: str, opcodes: list[tuple
 
 
 def single_source_html(f: dict[str, object], focus: int = 1) -> str:
+    if is_path_only(f):
+        return f'<p class="empty-copy">预制体仅列目标，不分析内容变更。</p><p class="empty-copy">{e(f.get("status", "已变更"))}</p>'
     if f.get("binary"):
         return '<p class="empty-copy">二进制文件，不展示源码。</p>'
     if "afterText" not in f:
@@ -344,10 +350,10 @@ def single_source_html(f: dict[str, object], focus: int = 1) -> str:
     if previous_line is None:
         out += '<p class="empty-copy">本文件没有保留的目标方法或新增行；删除内容见下方，不提供旧行跳转。</p>'
     if deleted:
-        out += '<details class="deleted-code"><summary>查看删除的旧代码（旧行号，不用于跳转）</summary><pre>'
+        out += '<details class="deleted-code"><summary>查看删除的旧代码（旧行号，不用于跳转）</summary><div class="fold-content" data-fold-content><pre>'
         for n, line in deleted:
             out += f'<span class="code-line deleted"><span class="line-number">{n}</span><span class="line-text">{syntax_text(line, str(f["path"]))}</span></span>'
-        out += '</pre></details>'
+        out += '</pre></div></details>'
     return out + '</section>'
 
 
@@ -719,6 +725,14 @@ def specimen_pair_html(sc: dict[str, object], idx: int) -> str:
 
 def render_structured_diagram(diag: dict[str, object], item: dict[str, object]) -> str:
     dtype = str(diag.get("type", "scenarios"))
+    if dtype == "targets":
+        known = {str(fid): str(fid).split(":", 1)[-1] for fid in item.get("fileIds", [])}
+        names = diag.get("files") or list(known.values())
+        if not isinstance(names, list) or any(not isinstance(name, str) or name not in known and name not in known.values() for name in names):
+            raise ValueError("targets.files must list changed paths or IDs from this chapter.")
+        names = [known.get(name, name) for name in names]
+        nodes = "".join(f'<div class="domain-node">{artifact_file(str(name))}</div>' for name in dict.fromkeys(names))
+        return f'<div class="visual-stage"><div class="vis-grid-2">{nodes}</div></div>'
     if dtype == "routing":
         before_obj = diag.get("before") if isinstance(diag.get("before"), dict) else {}
         before_state = str(
@@ -1028,6 +1042,9 @@ def render_structured_diagram(diag: dict[str, object], item: dict[str, object]) 
 
 
 def render_report_body(data: dict[str, object], spec: dict[str, object]) -> str:
+    spec = expand_spec(data, spec)
+    if spec.get("_draft") or "__FILL__" in json.dumps(spec, ensure_ascii=False):
+        raise ValueError("请填写模板中的 __FILL__ 字段并移除 _draft 后再生成汇报。")
     files: dict[str, dict[str, object]] = {str(f["id"]): f for f in data.get("files", [])}
     spec_items: list[dict[str, object]] = list(spec.get("items", []))
 
@@ -1069,13 +1086,12 @@ def render_report_body(data: dict[str, object], spec: dict[str, object]) -> str:
             }
         )
         seen_files.add(str(f["id"]))
-        chunks = f.get("chunks", [])
+        chunks = [] if is_path_only(f) else f.get("chunks", [])
         if before is None and after is None and chunks:
             before = changed_rows(chunks[0], "before")
             after = changed_rows(chunks[0], "after")
         before = before or []
         after = after or []
-        rem = remaining_chunks(f, before, after) if chunks else []
         variant_html = f'<span class="file-variant">{e(variant)}</span>' if variant else ""
         focus = int(after[0]["line"]) if after else int(chunks[0]["newStart"]) if chunks else 1
         content = single_source_html(f, focus)
@@ -1091,6 +1107,7 @@ def render_report_body(data: dict[str, object], spec: dict[str, object]) -> str:
     counted_files = [f for f in files.values() if f.get("scope") != "history"]
     total_add = sum(int(f["add"]) for f in counted_files)
     total_delete = sum(int(f["delete"]) for f in counted_files)
+    count_note = " · 部分资源未统计行数" if any(f.get("countsKnown") is False for f in counted_files) else ""
     ranges = data.get("ranges", {})
     range_tokens: list[str] = []
     for r_info in ranges.values():
@@ -1121,7 +1138,7 @@ def render_report_body(data: dict[str, object], spec: dict[str, object]) -> str:
     metadata = (
         f'<div class="header-controls">'
         f'<div class="report-meta"><span>{data["uniquePaths"]} 个文件 '
-        f"<b>+{total_add}</b> <i>−{total_delete}</i></span>"
+        f"<b>+{total_add}</b> <i>−{total_delete}</i>{count_note}</span>"
         f'<span>🎯 {len(core_paths)} 核心 · 📎 {sync_count} 外围</span>'
         f"<code>{e(range_chain)}</code></div></div>"
     )
@@ -1187,8 +1204,8 @@ def render_report_body(data: dict[str, object], spec: dict[str, object]) -> str:
                     raise ValueError(f"fileId '{fid}' in item {n}, point {j} is not listed in item.fileIds")
                 f = files[fid]
                 has_explicit_spec = "before" in d or "after" in d
-                before_rows = select_rows(f, "before", d.get("before", [] if has_explicit_spec else None))
-                after_rows = select_rows(f, "after", d.get("after", [] if has_explicit_spec else None))
+                before_rows = [] if is_path_only(f) else select_rows(f, "before", d.get("before", [] if has_explicit_spec else None))
+                after_rows = [] if is_path_only(f) else select_rows(f, "after", d.get("after", [] if has_explicit_spec else None))
                 raw_role = str(d.get("role", "")).strip() or pt_copy or None
                 points_html += diff_card(
                     n,

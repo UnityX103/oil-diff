@@ -14,6 +14,7 @@ if sys.version_info < (3, 10):
 
 SKILL_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = SKILL_ROOT / "scripts"
+sys.path.insert(0, str(SCRIPTS_DIR))
 
 
 def run_cmd(args: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -250,6 +251,34 @@ function hidden() { return 0; }
         rule = css.split(".drawer-file-identity strong{", 1)[1].split("}", 1)[0]
         for value in ("max-width:none", "white-space:normal", "overflow:visible", "overflow-wrap:anywhere"):
             self.assertIn(value, rule)
+
+    def test_deleted_code_provides_content_for_interactive_fold(self):
+        from html.parser import HTMLParser
+
+        class Fold(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.in_deleted = False
+                self.content_tags = []
+
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if tag == "details" and attrs.get("class") == "deleted-code":
+                    self.in_deleted = True
+                if self.in_deleted and "data-fold-content" in attrs:
+                    self.content_tags.append(tag)
+
+            def handle_endtag(self, tag):
+                if tag == "details":
+                    self.in_deleted = False
+
+        for before, after in (("old\n", "new\n"), ("old\n", "")):
+            with self.subTest(after=after):
+                output = self.render_method_change("sample.txt", before, after)
+                parser = Fold()
+                parser.feed(output)
+                self.assertEqual(parser.content_tags, ["div"],
+                                 "Deleted source needs the same content container as other animated folds")
 
 
 class OilDiffWorkflowTests(unittest.TestCase):
